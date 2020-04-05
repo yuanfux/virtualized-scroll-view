@@ -1,0 +1,31 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`<VirtualizedScrollview /> renders correctly 1`] = `
+<VirtualizedScrollview
+  text="Hello World!"
+>
+  <View
+    style={
+      Object {
+        "alignItems": "center",
+        "justifyContent": "center",
+      }
+    }
+  >
+    <View
+      style={
+        Object {
+          "alignItems": "center",
+          "justifyContent": "center",
+        }
+      }
+    >
+      <Text>
+        <Text>
+          Hello World!
+        </Text>
+      </Text>
+    </View>
+  </View>
+</VirtualizedScrollview>
+`;
