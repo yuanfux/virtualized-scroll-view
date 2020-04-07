@@ -9,6 +9,7 @@ import {
   PixelRatio,
   Button,
   findNodeHandle,
+  FlatList,
 } from 'react-native';
 import {
   VirtualizedScrollView,
@@ -16,17 +17,20 @@ import {
 } from '../src';
 
 const { width, height } = Dimensions.get('window');
-const array = Array(100).fill(0);
+const array = Array(1000).fill(0);
 const rowHeight = 100;
 const imageWidth = 0.8 * width;
 const restWidth = width - imageWidth;
 
 const App = () => {
-  const renderItem = (index) => {
-    const uri = `https://picsum.photos/1024/1024?index=${index}`;
+  const renderItem = ({ index }) => {
+    // console.log('renderItem', item, index);
+    // const uri = `https://picsum.photos/200/300?index=${index}`;
+    const uri = `https://5b0988e595225.cdn.sohucs.com/images/20180911/72d7781b49cc4a84935b381105b5a842.jpeg?index=${index}`;
     return (
-      <VirtualizedView
+      <View
         key={index}
+        index={index}
         style={styles.row}
       >
         <View
@@ -40,31 +44,60 @@ const App = () => {
           style={styles.image}
           source={{ uri }}
         />
-      </VirtualizedView>
+      </View>
     );
   };
 
-  const onScroll = (event) => {
-    console.log('onScroll', event.nativeEvent.contentOffset.y);
-  };
+  // const onScroll = (event) => {
+  //   console.log('onScroll', event.nativeEvent.contentOffset.y);
+  // };
 
   return (
     <View style={styles.container}>
-      <VirtualizedScrollView
+      <ScrollView
         style={{
           width,
           height,
         }}
-        onScroll={onScroll}
+        removeClippedSubviews
+        // onScroll={onScroll}
         scrollEventThrottle={16}
       >
-        {
-          array.map((_, index) => renderItem(index + 1))
-        }
-      </VirtualizedScrollView>
+        <View>
+          <View>
+            {
+              array.map((_, index) => renderItem({ index: index + 1 }))
+            }
+          </View>
+        </View>
+      </ScrollView>
+      {/* <FlatList
+        data={array}
+        style={{ width, height }}
+        renderItem={renderItem}
+      /> */}
     </View>
   );
 };
+
+// class Block extends React.PureComponent {
+//   componentDidMount() {
+//     console.log('Block mounted');
+//   }
+
+//   componentWillUnmount() {
+//     console.log('Block unmounted');
+//   }
+
+//   render = () => {
+//     const { children } = this.props;
+//     return (
+//       <View {...this.props}>
+//         { children }
+//       </View>
+//     )
+//   }
+// }
 
 // class App extends React.PureComponent {
 //   scrollViewRef = React.createRef();
@@ -119,16 +152,15 @@ const App = () => {
 //             scrollEventThrottle={16}
 //           >
 //             {
-//               visible && (
-//                 <View
-//                   style={{
-//                     marginTop: 300,
-//                     height: 300,
-//                     width: 300,
-//                     backgroundColor: 'pink',
-//                   }}
-//                 />
-//               )
+//               <Block
+//                 display={visible ? 'flex' : 'none'}
+//                 style={{
+//                   marginTop: 300,
+//                   height: 300,
+//                   width: 300,
+//                   backgroundColor: 'pink',
+//                 }}
+//               />
 //             }
 //             <View
 //               ref={this.viewRef}
