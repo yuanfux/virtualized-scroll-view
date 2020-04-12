@@ -13,22 +13,37 @@ class VirtualizedScrollView extends React.PureComponent {
   state = {
     width: 0,
     height: 0,
-    scrollY: 0,
-    scrollX: 0,
     contentHeight: 0,
     contentWidth: 0,
   }
 
-  onScroll = (event) => {
-    this.setState({
-      scrollX: event.nativeEvent.contentOffset.x,
-      scrollY: event.nativeEvent.contentOffset.y,
-    });
+  scrollPosition = {
+    x: 0,
+    y: 0,
+  };
 
+  virtualizedViewRefMap = {};
+
+  setVirtualizedViewRef = (refKey, ref) => {
+    this.virtualizedViewRefMap[refKey] = ref;
+  }
+
+  updateVirtualizdViews = () => {
+    const refKeys = Object.keys(this.virtualizedViewRefMap);
+    for (let i = 0; i < refKeys.length; i += 1) {
+      this.virtualizedViewRefMap[refKeys[i]].update();
+    }
+  }
+
+  onScroll = (event) => {
     const { onScroll } = this.props;
     if (onScroll) {
       onScroll(event);
     }
+
+    this.scrollPosition.x = event.nativeEvent.contentOffset.x;
+    this.scrollPosition.y = event.nativeEvent.contentOffset.y;
+    this.updateVirtualizdViews();
   }
 
   onContentSizeChange = (contentWidth, contentHeight) => {
@@ -67,8 +82,6 @@ class VirtualizedScrollView extends React.PureComponent {
     const {
       width,
       height,
-      scrollY,
-      scrollX,
       contentHeight,
       contentWidth,
     } = this.state;
@@ -80,8 +93,9 @@ class VirtualizedScrollView extends React.PureComponent {
         onLayout={this.onLayout}
       >
         <ScrollView
-          {...restProps}
           removeClippedSubviews={false}
+          {...restProps}
+          scrollEventThrottle={16}
           onScroll={this.onScroll}
           onContentSizeChange={this.onContentSizeChange}
           ref={forwardedRef}
@@ -90,16 +104,16 @@ class VirtualizedScrollView extends React.PureComponent {
             value={{
               width,
               height,
-              scrollY,
-              scrollX,
               contentHeight,
               contentWidth,
               horizontal,
               viewportBuffer,
               containerRef: this.containerRef,
+              scrollPosition: this.scrollPosition,
+              setVirtualizedViewRef: this.setVirtualizedViewRef,
             }}
           >
-            { children }
+            {children}
           </VirtualizedScrollViewContext.Provider>
         </ScrollView>
       </View>
@@ -110,7 +124,6 @@ class VirtualizedScrollView extends React.PureComponent {
 VirtualizedScrollView.propTypes = {
   children: PropTypes.node,
   horizontal: PropTypes.bool,
-  scrollEventThrottle: PropTypes.number,
   onScroll: PropTypes.func,
   onContentSizeChange: PropTypes.func,
   onLayout: PropTypes.func,
@@ -126,7 +139,6 @@ VirtualizedScrollView.propTypes = {
 VirtualizedScrollView.defaultProps = {
   children: null,
   horizontal: false,
-  scrollEventThrottle: 16,
   onScroll: null,
   onContentSizeChange: null,
   onLayout: null,

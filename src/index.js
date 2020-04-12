@@ -1,5 +1,5 @@
-import VirtualizedScrollView from './VirtualizedScrollView2';
-import VirtualizedView from './VirtualizedView3';
+import VirtualizedScrollView from './VirtualizedScrollView';
+import VirtualizedView from './VirtualizedViewWrapper';
 
 export {
   VirtualizedScrollView,
