@@ -17,3 +17,5 @@ coverage/
 
 # expo
 .expo/*
+
+web-build/
