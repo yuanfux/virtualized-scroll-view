@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -17,36 +17,51 @@ import {
 } from '../src';
 
 const { width, height } = Dimensions.get('window');
-const array = Array(1000).fill(0);
+const array = Array(15).fill(0);
 const rowHeight = 100;
-const imageWidth = 0.8 * width;
-const restWidth = width - imageWidth;
+const imageWidth = 0.6 * width;
+const buttonWidth = 0.2 * width;
+const restWidth = width - imageWidth - buttonWidth;
+
+const Row = ({ index }) => {
+  const uri = `https://5b0988e595225.cdn.sohucs.com/images/20180911/72d7781b49cc4a84935b381105b5a842.jpeg?index=${index}`;
+  const [show, setShow] = useState(true);
+  const onPress = useCallback(() => {
+    setShow(!show);
+  });
+  return (
+    <VirtualizedView
+      index={index}
+      style={styles.row}
+    >
+      <View
+        style={styles.index}
+      >
+        <Text>
+          {index}
+        </Text>
+      </View>
+      {
+        show ? (
+          <Image
+            style={styles.image}
+            source={{ uri }}
+          />
+        ) : null
+      }
+      <Button
+        style={styles.button}
+        title="update"
+        onPress={onPress}
+      />
+    </VirtualizedView>
+  );
+};
 
 const App = () => {
-  const renderItem = ({ index }) => {
-    // console.log('renderItem', item, index);
-    // const uri = `https://picsum.photos/200/300?index=${index}`;
-    const uri = `https://5b0988e595225.cdn.sohucs.com/images/20180911/72d7781b49cc4a84935b381105b5a842.jpeg?index=${index}`;
-    return (
-      <View
-        key={index}
-        index={index}
-        style={styles.row}
-      >
-        <View
-          style={styles.index}
-        >
-          <Text>
-            { index }
-          </Text>
-        </View>
-        <Image
-          style={styles.image}
-          source={{ uri }}
-        />
-      </View>
-    );
-  };
+  const renderItem = ({ index }) => (
+    <Row key={index} index={index} />
+  );
 
   // const onScroll = (event) => {
   //   console.log('onScroll', event.nativeEvent.contentOffset.y);
@@ -54,7 +69,7 @@ const App = () => {
 
   return (
     <View style={styles.container}>
-      <ScrollView
+      <VirtualizedScrollView
         style={{
           width,
           height,
@@ -70,7 +85,7 @@ const App = () => {
             }
           </View>
         </View>
-      </ScrollView>
+      </VirtualizedScrollView>
       {/* <FlatList
         data={array}
         style={{ width, height }}
@@ -200,6 +215,10 @@ const styles = StyleSheet.create({
     height: rowHeight,
     width: imageWidth,
   },
+  button: {
+    height: rowHeight,
+    width: buttonWidth,
+  }
 });
 
 export default App;

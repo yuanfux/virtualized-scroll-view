@@ -13,22 +13,44 @@ class VirtualizedScrollView extends React.PureComponent {
   state = {
     width: 0,
     height: 0,
-    scrollY: 0,
-    scrollX: 0,
     contentHeight: 0,
     contentWidth: 0,
   }
 
+  // scrollX = 0;
+
+  // scrollY = 0;
+
+  scrollPosition = {
+    x: 0,
+    y: 0,
+  };
+
+  virtualizedViewRefMap = {};
+
+  setVirtualizedViewRef = (key, ref) => {
+    this.virtualizedViewRefMap[key] = ref;
+    // console.log('setRef', Object.keys(this.virtualizedViewRefMap).length);
+  }
+
+  updateVirtualizdView = () => {
+    const keys = Object.keys(this.virtualizedViewRefMap);
+    for (let i = 0; i < keys.length; i += 1) {
+      this.virtualizedViewRefMap[keys[i]].update();
+    }
+  }
+
   onScroll = (event) => {
-    this.setState({
-      scrollX: event.nativeEvent.contentOffset.x,
-      scrollY: event.nativeEvent.contentOffset.y,
-    });
+    this.scrollPosition.x = event.nativeEvent.contentOffset.x;
+    this.scrollPosition.y = event.nativeEvent.contentOffset.y;
+    // this.scrollY = event.nativeEvent.contentOffset.y;
 
     const { onScroll } = this.props;
     if (onScroll) {
       onScroll(event);
     }
+
+    this.updateVirtualizdView();
   }
 
   onContentSizeChange = (contentWidth, contentHeight) => {
@@ -67,12 +89,12 @@ class VirtualizedScrollView extends React.PureComponent {
     const {
       width,
       height,
-      scrollY,
-      scrollX,
+      // scrollY,
+      // scrollX,
       contentHeight,
       contentWidth,
     } = this.state;
-
+    console.log('scrollview');
     return (
       <View
         style={style}
@@ -90,16 +112,18 @@ class VirtualizedScrollView extends React.PureComponent {
             value={{
               width,
               height,
-              scrollY,
-              scrollX,
+              // scrollY: this.scrollX,
+              // scrollX: this.scrollY,
+              scrollPosition: this.scrollPosition,
               contentHeight,
               contentWidth,
               horizontal,
               viewportBuffer,
               containerRef: this.containerRef,
+              setVirtualizedViewRef: this.setVirtualizedViewRef,
             }}
           >
-            { children }
+            {children}
           </VirtualizedScrollViewContext.Provider>
         </ScrollView>
       </View>

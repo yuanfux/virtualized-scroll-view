@@ -8,5 +8,7 @@ export default createContext({
   contentHeight: 0,
   contentWidth: 0,
   horizontal: false,
+  viewportBuffer: 200,
   containerRef: { current: {} },
+  setVirtualizedViewRef: null,
 });

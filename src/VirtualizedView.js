@@ -5,6 +5,7 @@ import {
   findNodeHandle,
 } from 'react-native';
 import PropTypes from 'prop-types';
+import shallowCompare from 'react-addons-shallow-compare';
 import VirtualizedScrollViewContext from './VirtualizedScrollViewContext';
 
 const VirtualizedViewWrapper = props => (
@@ -30,7 +31,41 @@ VirtualizedViewWrapper.defaultProps = {
   children: null,
 };
 
-class VirtualizedView extends React.PureComponent {
+const isInViewport = ({
+  horizontal,
+  containerWidth,
+  containerHeight,
+  scrollY,
+  scrollX,
+  viewportBuffer,
+  width,
+  height,
+  x,
+  y,
+}) => {
+  console.log('inViewport');
+  let inViewport = true;
+  if (
+    containerWidth
+    && containerHeight
+    && width
+    && height
+  ) {
+    const scrollOffset = horizontal ? scrollX : scrollY;
+    const viewPortLength = horizontal ? containerWidth : containerHeight;
+    const elementOffset = horizontal ? x : y;
+    const elementLength = horizontal ? width : height;
+    if (
+      elementLength + elementOffset < scrollOffset - viewportBuffer
+      || elementOffset > scrollOffset + viewPortLength + viewportBuffer
+    ) {
+      inViewport = false;
+    }
+  }
+  return inViewport;
+};
+
+class VirtualizedView extends React.Component {
   viewRef = React.createRef();
 
   state = {
@@ -38,10 +73,62 @@ class VirtualizedView extends React.PureComponent {
     y: 0,
     width: 0,
     height: 0,
+    visible: true,
+  }
+
+  static getDerivedStateFromProps(props, state) {
+    const {
+      horizontal,
+      width: containerWidth,
+      height: containerHeight,
+      scrollY,
+      scrollX,
+      viewportBuffer,
+    } = props;
+    const {
+      width,
+      height,
+      x,
+      y,
+      visible,
+    } = state;
+    const nextVisible = isInViewport({
+      horizontal,
+      containerWidth,
+      containerHeight,
+      scrollY,
+      scrollX,
+      viewportBuffer,
+      width,
+      height,
+      x,
+      y,
+    });
+    if (visible !== nextVisible) {
+      return {
+        visible: nextVisible,
+      };
+    }
+    return null;
   }
 
   componentDidMount() {
     this.measureLayout();
+  }
+
+  shouldComponentUpdate(nextProps, nextState) {
+    const { scrollX, scrollY, ...restProps } = this.props;
+    const { scrollX: nextScrollX, scrollY: nextScrollY, ...restNextProps } = nextProps;
+
+    if (
+      shallowCompare({
+        props: restProps,
+        state: this.state,
+      }, restNextProps, nextState)
+    ) {
+      return true;
+    }
+    return false;
   }
 
   componentDidUpdate(prevProps) {
@@ -102,6 +189,7 @@ class VirtualizedView extends React.PureComponent {
       height: containerHeight,
       scrollY,
       scrollX,
+      viewportBuffer,
     } = this.props;
     const {
       width,
@@ -118,8 +206,8 @@ class VirtualizedView extends React.PureComponent {
       const elementOffset = horizontal ? x : y;
       const elementLength = horizontal ? width : height;
       if (
-        elementLength + elementOffset < scrollOffset
-        || elementOffset > scrollOffset + viewPortLength
+        elementLength + elementOffset < scrollOffset - viewportBuffer
+        || elementOffset > scrollOffset + viewPortLength + viewportBuffer
       ) {
         inViewport = false;
       }
@@ -139,37 +227,32 @@ class VirtualizedView extends React.PureComponent {
         contentHeight,
         contentWidth,
         horizontal,
+        viewportBuffer,
         containerRef,
         ...restProps
       },
     } = this;
 
+    const { visible } = this.state;
+    const { width, height } = this.state;
     // original
-    let view = (
+    // console.log('render');
+    const view = visible ? (
       <View
         {...restProps}
         ref={this.viewRef}
       >
         {children}
       </View>
+    ) : (
+      <View
+        {...restProps}
+        style={{
+          width,
+          height,
+        }}
+      />
     );
-
-    // placeholder
-    if (
-      this.isMeasurementFinished()
-      && !this.inViewport()
-    ) {
-      const { width, height } = this.state;
-      view = (
-        <View
-          {...restProps}
-          style={{
-            width,
-            height,
-          }}
-        />
-      );
-    }
 
     return view;
   }
@@ -184,6 +267,7 @@ VirtualizedView.propTypes = {
   contentHeight: PropTypes.number,
   contentWidth: PropTypes.number,
   horizontal: PropTypes.bool,
+  viewportBuffer: PropTypes.number,
   containerRef: PropTypes.shape({
     current: PropTypes.any,
   }),
@@ -198,6 +282,7 @@ VirtualizedView.defaultProps = {
   contentHeight: 0,
   contentWidth: 0,
   horizontal: false,
+  viewportBuffer: 200,
   containerRef: { current: {} },
 };
 

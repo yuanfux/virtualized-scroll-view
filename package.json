@@ -15,7 +15,11 @@
   "files": [
     "src/*"
   ],
-  "dependencies": {},
+  "dependencies": {
+    "lodash.debounce": "^4.0.8",
+    "react-addons-shallow-compare": "^15.6.2",
+    "uuid": "^7.0.3"
+  },
   "peerDependencies": {
     "prop-types": "^15.7.2"
   },
