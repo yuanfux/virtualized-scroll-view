@@ -1,21 +1,28 @@
 import React from 'react';
 import {
   // StyleSheet,
-  View,
+  // View,
   ScrollView,
+  Platform,
 } from 'react-native';
 import PropTypes from 'prop-types';
+// import shallowCompare from 'react-addons-shallow-compare';
+import debounce from 'lodash.debounce';
+import Bottleneck from 'bottleneck';
 import VirtualizedScrollViewContext from './VirtualizedScrollViewContext';
 
 class VirtualizedScrollView extends React.PureComponent {
   containerRef = React.createRef();
 
-  state = {
+  scrollViewLayout = {
     width: 0,
     height: 0,
-    contentHeight: 0,
-    contentWidth: 0,
   }
+
+  contentLayout = {
+    width: 0,
+    height: 0,
+  };
 
   scrollPosition = {
     x: 0,
@@ -24,15 +31,49 @@ class VirtualizedScrollView extends React.PureComponent {
 
   virtualizedViewRefMap = {};
 
-  setVirtualizedViewRef = (refKey, ref) => {
-    this.virtualizedViewRefMap[refKey] = ref;
-  }
+  // Excessive number of pending callbacks error
+  // https://github.com/facebook/react-native/issues/27483
 
-  updateVirtualizdViews = () => {
+  updateViewVisibilities = debounce((pendingUpdate = false) => {
     const refKeys = Object.keys(this.virtualizedViewRefMap);
     for (let i = 0; i < refKeys.length; i += 1) {
-      this.virtualizedViewRefMap[refKeys[i]].update();
+      this.virtualizedViewRefMap[refKeys[i]].updateVisibility(pendingUpdate);
     }
+    if (pendingUpdate) {
+      // force update to improve performance
+      // when the number of views is large
+      this.forceUpdate();
+    }
+  });
+
+  updateViewVisibilitiesPendingUpdate = debounce(() => this.updateViewVisibilities(true))
+
+  updateViewVisibilitiesImmediateUpdate = debounce(() => this.updateViewVisibilities(false))
+
+  updateLayout = refKey => this.virtualizedViewRefMap[refKey].updateLayout()
+
+  // concurrent issue
+  // https://github.com/facebook/react-native/issues/27483
+  updateViewLayouts = () => {
+    const limiter = new Bottleneck({
+      maxConcurrent: 500,
+    });
+    const updateLayout = Platform.OS === 'web' ? this.updateLayout : limiter.wrap(this.updateLayout);
+    Promise.all(
+      Object.keys(this.virtualizedViewRefMap)
+        .map(refKey => updateLayout(refKey)),
+    ).then(() => {
+      // console.log('all finished');
+      // measuring is finished
+      // update all visibilities
+      this.updateViewVisibilitiesPendingUpdate();
+    }).catch(() => {
+      console.error('VirtualizedView: updateLayout failed.');
+    });
+  };
+
+  setVirtualizedViewRef = (refKey, ref) => {
+    this.virtualizedViewRefMap[refKey] = ref;
   }
 
   onScroll = (event) => {
@@ -40,17 +81,23 @@ class VirtualizedScrollView extends React.PureComponent {
     if (onScroll) {
       onScroll(event);
     }
-
     this.scrollPosition.x = event.nativeEvent.contentOffset.x;
     this.scrollPosition.y = event.nativeEvent.contentOffset.y;
-    this.updateVirtualizdViews();
+    this.updateViewVisibilitiesImmediateUpdate();
   }
 
   onContentSizeChange = (contentWidth, contentHeight) => {
-    this.setState({
-      contentHeight,
-      contentWidth,
-    });
+    // console.log('onContentSizeChange');
+    const prevContentWidth = this.contentLayout.width;
+    const prevContentHeight = this.contentLayout.height;
+    this.contentLayout.width = contentWidth;
+    this.contentLayout.height = contentHeight;
+
+    // updating view layouts will be handled in onLayout when
+    // onContentSizeChange is being called for the first time
+    if (prevContentWidth !== 0 || prevContentHeight !== 0) {
+      this.updateViewLayouts();
+    }
 
     const { onContentSizeChange } = this.props;
     if (onContentSizeChange) {
@@ -59,10 +106,19 @@ class VirtualizedScrollView extends React.PureComponent {
   }
 
   onLayout = (event) => {
-    this.setState({
-      width: event.nativeEvent.layout.width,
-      height: event.nativeEvent.layout.height,
-    });
+    // const prevWidth = this.scrollViewLayout.width;
+    // const prevHeight = this.scrollViewLayout.height;
+    this.scrollViewLayout.width = event.nativeEvent.layout.width;
+    this.scrollViewLayout.height = event.nativeEvent.layout.height;
+
+    // only need to update view visibilities when
+    // onLayout is being called for the first time
+    this.updateViewLayouts();
+
+    const { onLayout } = this.props;
+    if (onLayout) {
+      onLayout(event);
+    }
   }
 
   render = () => {
@@ -73,50 +129,35 @@ class VirtualizedScrollView extends React.PureComponent {
       },
       props: {
         forwardedRef,
-        style,
         viewportBuffer,
+        scrollEventThrottle,
         ...restProps
       },
     } = this;
-
-    const {
-      width,
-      height,
-      contentHeight,
-      contentWidth,
-    } = this.state;
-
     return (
-      <View
-        style={style}
-        ref={this.containerRef}
+      <ScrollView
+        removeClippedSubviews={false}
+        {...restProps}
+        scrollEventThrottle={scrollEventThrottle}
         onLayout={this.onLayout}
+        onScroll={this.onScroll}
+        onContentSizeChange={this.onContentSizeChange}
+        ref={this.containerRef}
       >
-        <ScrollView
-          removeClippedSubviews={false}
-          {...restProps}
-          scrollEventThrottle={16}
-          onScroll={this.onScroll}
-          onContentSizeChange={this.onContentSizeChange}
-          ref={forwardedRef}
+        <VirtualizedScrollViewContext.Provider
+          value={{
+            horizontal,
+            viewportBuffer,
+            containerRef: this.containerRef,
+            scrollViewLayout: this.scrollViewLayout,
+            contentLayout: this.contentLayout,
+            scrollPosition: this.scrollPosition,
+            setVirtualizedViewRef: this.setVirtualizedViewRef,
+          }}
         >
-          <VirtualizedScrollViewContext.Provider
-            value={{
-              width,
-              height,
-              contentHeight,
-              contentWidth,
-              horizontal,
-              viewportBuffer,
-              containerRef: this.containerRef,
-              scrollPosition: this.scrollPosition,
-              setVirtualizedViewRef: this.setVirtualizedViewRef,
-            }}
-          >
-            {children}
-          </VirtualizedScrollViewContext.Provider>
-        </ScrollView>
-      </View>
+          {children}
+        </VirtualizedScrollViewContext.Provider>
+      </ScrollView>
     );
   }
 }
@@ -131,9 +172,10 @@ VirtualizedScrollView.propTypes = {
     PropTypes.shape({
       current: PropTypes.any,
     }),
-    PropTypes.func,
+    // PropTypes.func,
   ]),
   viewportBuffer: PropTypes.number,
+  scrollEventThrottle: PropTypes.number,
 };
 
 VirtualizedScrollView.defaultProps = {
@@ -144,6 +186,7 @@ VirtualizedScrollView.defaultProps = {
   onLayout: null,
   forwardedRef: null,
   viewportBuffer: 0,
+  scrollEventThrottle: 16,
 };
 
 const VirtualizedScrollViewWrapper = React.forwardRef((props, ref) => (

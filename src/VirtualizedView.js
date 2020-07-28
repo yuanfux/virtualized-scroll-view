@@ -2,19 +2,18 @@ import React from 'react';
 import {
   View,
   findNodeHandle,
+  Platform,
 } from 'react-native';
 import PropTypes from 'prop-types';
 import shallowCompare from 'react-addons-shallow-compare';
 
 const pickIrrelevantProps = (props) => {
   const {
-    width,
-    height,
-    contentHeight,
-    contentWidth,
     horizontal,
     viewportBuffer,
     containerRef,
+    scrollViewLayout,
+    contentLayout,
     scrollPosition,
     ...restProps
   } = props;
@@ -34,8 +33,33 @@ class VirtualizedView extends React.Component {
 
   visible = true;
 
-  componentDidMount() {
-    this.measureLayout(this.props);
+  pendingUpdate = false;
+
+  needMeasure = true;
+
+  constructor(props) {
+    super(props);
+    const {
+      layout: {
+        width,
+        height,
+        offset,
+      } = {},
+      horizontal,
+    } = props;
+
+    if (
+      typeof width === 'number'
+      && typeof height === 'number'
+    ) {
+      this.width = width;
+      this.height = height;
+      this.visible = false;
+      if (typeof offset === 'number') {
+        this[horizontal ? 'x' : 'y'] = offset;
+        this.needMeasure = false;
+      }
+    }
   }
 
   shouldComponentUpdate(nextProps, nextState) {
@@ -46,46 +70,48 @@ class VirtualizedView extends React.Component {
         props: pickIrrelevantProps(this.props),
         state: this.state,
       }, pickIrrelevantProps(nextProps), nextState)
+      || this.pendingUpdate
     ) {
+      this.pendingUpdate = false;
       return true;
     }
 
     // relevant props change
     // customized rendering
-    const {
-      viewportBuffer,
-      ...restProps
-    } = this.props;
+    // const {
+    //   viewportBuffer,
+    //   ...restProps
+    // } = this.props;
 
-    const {
-      viewportBuffer: nextViewportBuffer,
-      ...restNextProps
-    } = nextProps;
+    // const {
+    //   viewportBuffer: nextViewportBuffer,
+    //   ...restNextProps
+    // } = nextProps;
 
-    if (
-      !shallowCompare({
-        props: restProps,
-        state: this.state,
-      }, restNextProps, nextState)
-      && viewportBuffer !== nextViewportBuffer
-    ) {
-      // viewportBuffer changes
-      this.isInViewport(nextProps);
-    } else {
-      // other relevant props change
-      this.measureLayout(nextProps);
-    }
+    // if (
+    //   !shallowCompare({
+    //     props: restProps,
+    //     state: this.state,
+    //   }, restNextProps, nextState)
+    //   && (viewportBuffer !== nextViewportBuffer)
+    // ) {
+    //   // viewportBuffer changes
+    //   // console.log('relevant change', this.props, nextProps);
+    //   this.isInViewport(nextProps);
+    // }
     return false;
   }
 
-  isInViewport = (props) => {
+  isInViewport = (props, pendingUpdate = false) => {
     const {
       horizontal,
-      width: containerWidth,
-      height: containerHeight,
       scrollPosition: {
         x: scrollX,
         y: scrollY,
+      },
+      scrollViewLayout: {
+        width: containerWidth,
+        height: containerHeight,
       },
       viewportBuffer,
     } = props;
@@ -98,6 +124,12 @@ class VirtualizedView extends React.Component {
     } = this;
 
     let inViewport = true;
+    // console.log('index', this.props.index);
+    // console.log('viewportBuffer', viewportBuffer);
+    // console.log('scrollY', scrollY);
+    // console.log('scrollViewLayout', containerHeight);
+    // console.log('viewLayout', height, width, 'y', y);
+    // console.log('-----------------');
     if (
       containerWidth
       && containerHeight
@@ -105,68 +137,103 @@ class VirtualizedView extends React.Component {
       && height
     ) {
       const scrollOffset = horizontal ? scrollX : scrollY;
-      const viewPortLength = horizontal ? containerWidth : containerHeight;
+      const viewportLength = horizontal ? containerWidth : containerHeight;
       const elementOffset = horizontal ? x : y;
       const elementLength = horizontal ? width : height;
       if (
         elementLength + elementOffset < scrollOffset - viewportBuffer
-        || elementOffset > scrollOffset + viewPortLength + viewportBuffer
+        || elementOffset > scrollOffset + viewportLength + viewportBuffer
       ) {
         inViewport = false;
       }
     }
+
     if (inViewport !== this.visible) {
       this.visible = inViewport;
-      this.forceUpdate();
+      if (pendingUpdate) {
+        this.pendingUpdate = true;
+      } else {
+        this.update();
+      }
     }
+  }
+
+  update = () => {
+    this.forceUpdate();
   }
 
   measureLayout = (props) => {
-    const { containerRef } = props;
-    if (
-      containerRef.current
-      && this.viewRef.current
-    ) {
-      const scrollViewNode = findNodeHandle(containerRef.current);
-      this.viewRef.current.measureLayout(
-        scrollViewNode,
-        (x, y, width, height) => {
-          this.x = x;
-          this.y = y;
-          this.width = width;
-          this.height = height;
-          this.isInViewport(props);
-        },
-      );
+    if (!this.needMeasure) {
+      return Promise.resolve();
     }
+
+    const {
+      containerRef,
+      // scrollPosition: {
+      //   x: scrollX,
+      //   y: scrollY,
+      // },
+    } = props;
+    // console.log('containerRef', containerRef);
+    // console.log('this.viewRef', this.viewRef);
+    return new Promise((resolve, reject) => {
+      if (
+        containerRef.current
+        && this.viewRef.current
+      ) {
+        const scrollViewNode = findNodeHandle(containerRef.current);
+        // console.log('trigger measureLayout');
+        this.viewRef.current.measureLayout(
+          scrollViewNode,
+          (x, y, width, height) => {
+            // console.log('measurelayout');
+            // console.log('measureLayout', this.props.index, y, height, scrollViewNode);
+            // console.log('offset', this.props.index * 100 - y);
+            // console.log(scrollViewNode.scrollTop);
+            // console.log('duration', performance.now() - start);
+            this.x = x + (Platform.OS === 'web' ? scrollViewNode.scrollLeft : 0);
+            this.y = y + (Platform.OS === 'web' ? scrollViewNode.scrollTop : 0);
+            this.width = width;
+            this.height = height;
+            resolve();
+            // this.updateVisibility(props);
+          },
+        );
+      } else {
+        reject();
+      }
+    });
   }
 
-  update() {
-    this.isInViewport(this.props);
+  updateVisibility = (pendingUpdate) => {
+    this.isInViewport(this.props, pendingUpdate);
+  };
+
+  updateLayout = () => {
+    const rt = this.measureLayout(this.props);
+    return rt;
   }
 
   render = () => {
     const {
       children,
+      placeholder,
+      style,
       ...restProps
     } = pickIrrelevantProps(this.props);
-
     const { visible, width, height } = this;
-    const view = visible ? (
+    const viewStyle = visible ? style : {
+      width,
+      height,
+    };
+    const view = (
       <View
         {...restProps}
+        style={viewStyle}
         ref={this.viewRef}
       >
-        {children}
+        { visible ? children : placeholder }
       </View>
-    ) : (
-      <View
-        {...restProps}
-        style={{
-          width,
-          height,
-        }}
-      />
     );
 
     return view;
@@ -175,22 +242,22 @@ class VirtualizedView extends React.Component {
 
 VirtualizedView.propTypes = {
   children: PropTypes.node,
-  width: PropTypes.number,
-  height: PropTypes.number,
-  contentHeight: PropTypes.number,
-  contentWidth: PropTypes.number,
   horizontal: PropTypes.bool,
   viewportBuffer: PropTypes.number,
+  placeholder: PropTypes.node,
+  layout: PropTypes.shape({
+    width: PropTypes.number,
+    height: PropTypes.number,
+    offset: PropTypes.number,
+  }),
 };
 
 VirtualizedView.defaultProps = {
   children: null,
-  width: 0,
-  height: 0,
-  contentHeight: 0,
-  contentWidth: 0,
   horizontal: false,
   viewportBuffer: 200,
+  placeholder: null,
+  layout: undefined,
 };
 
 export default VirtualizedView;
